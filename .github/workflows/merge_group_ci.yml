@@ -8,6 +8,7 @@
 name: Merge Group CI
 
 on:
+  pull_request:
   merge_group:
   workflow_dispatch:
 
