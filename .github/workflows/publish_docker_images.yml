@@ -8,6 +8,10 @@ on:
         description: 'Whether to push image to docker hub'
         required: true
         type: 'boolean'
+      version_changed:
+        description: 'Whether the docker version has changed'
+        required: true
+        type: 'boolean'
     secrets:
       DOCKERHUB_USERNAME:
         required: false
@@ -17,6 +21,7 @@ on:
 jobs:
   docker:
     runs-on: ubuntu-latest
+    if: ${{ inputs.version_changed }}
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
