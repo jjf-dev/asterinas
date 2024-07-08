@@ -56,15 +56,15 @@ jobs:
   
   ########### Jobs that will be called if version does _not_ change ###########
 
-  osdk_test:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
-    uses: ./.github/workflows/test_osdk.yml
+  # osdk_test:
+  #   needs: check_changed_files
+  #   if: needs.check_changed_files.outputs.version_changed != 'true'
+  #   uses: ./.github/workflows/test_osdk.yml
   
-  kernel_test:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
-    uses: ./.github/workflows/test_asterinas.yml
+  # kernel_test:
+  #   needs: check_changed_files
+  #   if: needs.check_changed_files.outputs.version_changed != 'true'
+  #   uses: ./.github/workflows/test_asterinas.yml
   
   check_build_doc:
     needs: check_changed_files

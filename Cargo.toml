@@ -1,4 +1,5 @@
 [workspace]
+
 resolver = "2"
 members = [
     "ostd",
@@ -28,6 +29,7 @@ members = [
     "kernel/libs/typeflags",
     "kernel/libs/typeflags-util",
 ]
+
 exclude = [
     "kernel/libs/comp-sys/cargo-component",
     "kernel/libs/comp-sys/component",
