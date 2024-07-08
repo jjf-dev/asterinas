@@ -1,8 +1,7 @@
-# CI that will be triggered when a PR is XXXXXX
+# CI that will be triggered when a PR is XXXXXXXXXX
 name: Merge Group CI
 
 on:
-  pull_request:
   merge_group:
   workflow_dispatch:
 
