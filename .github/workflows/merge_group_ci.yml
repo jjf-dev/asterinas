@@ -45,3 +45,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - run: echo "VERSION does not change"
+
+  fails_ci_negative:
+    needs: ['echo_negative']
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 1
+
+  fails_ci_positive: 
+    needs: ['echo_positive']
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 1
