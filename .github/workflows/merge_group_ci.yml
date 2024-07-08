@@ -1,4 +1,4 @@
-# CI that will be triggered when a PR is 
+# CI that will be triggered when a PR is XXX
 name: Merge Group CI
 
 on:
