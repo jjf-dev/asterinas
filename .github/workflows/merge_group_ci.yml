@@ -3,6 +3,9 @@ name: Merge Group CI
 
 on:
   merge_group:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
