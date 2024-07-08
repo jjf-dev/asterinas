@@ -98,6 +98,7 @@ jobs:
     uses: ./.github/workflows/publish_docker_images.yml
     with:
       push: true
+      version_changed: true
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

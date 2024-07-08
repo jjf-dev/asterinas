@@ -1,9 +1,14 @@
-# Jobs that will be run when a pull request is opened.
-
-name: Pull Request CI
+# CI workflow triggered when a PR is added to the merge queue.
+#
+# The jobs in this workflow are intentionally prefixed with `merge_group`,
+# indicating that they need to succeed for a PR to be merged.
+# These `merge_group` jobs should also be added in the 'Status checks that are required'
+# settings of the Github repository by the maintainer 
+# to ensure the job status is checked before merging.
+name: Merge Group CI
 
 on:
-  pull_request:
+  merge_group:
   workflow_dispatch:
 
 jobs:
@@ -28,7 +33,7 @@ jobs:
         run: |
           echo "VERSION changed: $VERSION_CHANGED"
           echo "version_changed=$VERSION_CHANGED" >> "$GITHUB_OUTPUT"
-
+  
   echo_positive:
     needs: check_changed_files
     runs-on: ubuntu-latest
@@ -46,49 +51,33 @@ jobs:
       - uses: actions/checkout@v4
 
       - run: echo "VERSION does not change"
-  
-  ########### Jobs that will be called if version does _not_ change ###########
 
-  osdk_test:
+  merge_group_docker_push:
     needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
-    uses: ./.github/workflows/test_osdk.yml
-  
-  kernel_test:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
-    uses: ./.github/workflows/test_asterinas.yml
-  
-  check_build_doc:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
-    uses: ./.github/workflows/publish_api_docs.yml
+    uses: ./.github/workflows/publish_docker_images.yml
     with:
-      upload: false
+      push: $ {{ needs.check_changed_files.outputs.version_changed == 'true' }}
+      version_changed: ${{ needs.check_changed_files.outputs.version_changed == 'true' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  check_publish_osdk:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
+  merge_group_kernel_test:
+    needs: [merge_group_docker_push]
+    uses: ./.github/workflows/test_asterinas.yml
+
+  merge_group_osdk_test:
+    needs: [merge_group_docker_push]
+    uses: ./.github/workflows/test_osdk.yml
+
+  merge_group_check_publish_osdk:
+    needs: [merge_group_docker_push]
     uses: ./.github/workflows/publish_osdk.yml
     with:
       publish: false
-  
-  check_build_website:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
+
+  merge_group_check_build_website:
+    needs: [merge_group_docker_push]
     uses: ./.github/workflows/publish_website.yml
     with:
       deploy: false
-
-  ########### Jobs that will be called if version changes ##########
-
-  # Jobs that will be run in pull request
-  docker_build:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed == 'true'
-    uses: ./.github/workflows/publish_docker_images.yml
-    with:
-      push: false
-      version_changed: true
-
-  # Some checks are delayed until the PR is added to the merge queue.
