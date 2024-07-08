@@ -2,6 +2,12 @@ name: Test OSDK
 
 on:
   workflow_call:
+    inputs:
+      skip: 
+        description: 'Whether to skip test'
+        required: false
+        default: false
+        type: 'boolean'
   workflow_dispatch:
 
 jobs:
@@ -21,7 +27,7 @@ jobs:
 
       - name: Lint
         id: lint
-        if: matrix.container == 'asterinas/asterinas:0.6.2'
+        if: ${{ matrix.container == 'asterinas/asterinas:0.6.2' && !inputs.skip }}
         run: make check_osdk
 
       # Github's actions/checkout@v4 will result in a new user (not root) 
@@ -31,6 +37,7 @@ jobs:
       # since the OSDK toolchain is not nightly.
       - name: Unit test
         id: unit_test
+        if: ${{ !inputs.skip }}
         run: |
           cd osdk
           RUSTUP_HOME=/root/.rustup cargo +stable build
