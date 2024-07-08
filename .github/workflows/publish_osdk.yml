@@ -3,6 +3,11 @@ name: Publish OSDK
 on:
   workflow_call:
     inputs:
+      check_publish: 
+        description: 'Whether to check publish'
+        required: false
+        default: true
+        type: 'boolean'
       publish:
         description: 'Whether to upload doc to online website'
         required: true
@@ -22,7 +27,7 @@ jobs:
 
       - name: Check Publish
         # On pull request, set `--dry-run` to check whether OSDK can publish
-        if: ${{ !inputs.publish }}
+        if: ${{ !inputs.publish && inputs.check_publish }}
         run: |
           cd osdk
           cargo publish --dry-run
