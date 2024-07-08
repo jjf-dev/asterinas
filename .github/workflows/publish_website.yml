@@ -4,9 +4,15 @@ on:
   workflow_dispatch:
   workflow_call:
     inputs:
+      build: 
+        description: 'Whether to build doc'
+        required: false
+        default: true
+        type: 'boolean'
       deploy:
         description: 'Whether to upload doc to online website'
-        required: true
+        required: false
+        default: false
         type: 'boolean'
     secrets:
       BOOK_PUBLISH_KEY:
@@ -24,6 +30,7 @@ jobs:
           path: 'asterinas'
       
       - name: Build the website
+        if: ${{ inputs.build }}
         run: |
           cd asterinas/docs
           mdbook build
