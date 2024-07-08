@@ -2,6 +2,11 @@ name: Test Asterinas
 
 on:
   workflow_call:
+    inputs:
+      skip: 
+        description: 'Whether to check publish'
+        required: true
+        type: 'boolean'
   workflow_dispatch:
 
 jobs:
@@ -20,6 +25,7 @@ jobs:
 
   unit-test:
     runs-on: ubuntu-latest
+    if: ${{ !inputs.skip }}
     timeout-minutes: 15
     container: asterinas/asterinas:0.6.2
     steps:
@@ -39,6 +45,7 @@ jobs:
 
   integration-test:
     runs-on: ubuntu-latest
+    # if: !inputs.skip
     timeout-minutes: 30
     container: asterinas/asterinas:0.6.2
     steps:
