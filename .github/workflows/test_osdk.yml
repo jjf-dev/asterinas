@@ -2,18 +2,25 @@ name: Test OSDK
 
 on:
   workflow_call:
+    inputs:
+      skip: 
+        description: 'Whether to skip osdk test'
+        required: false
+        default: false
+        type: 'boolean'
   workflow_dispatch:
 
 jobs:
   osdk-test:
+    if: ${{ !inputs.skip }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       matrix:
-        # asterinas/asterinas:0.6.2 container is the developing container of asterinas,
-        # asterinas/osdk:0.6.2 container is built with the intructions from Asterinas Book
-        container: ['asterinas/asterinas:0.6.2', 'asterinas/osdk:0.6.2']
-    container: ${{ matrix.container }}
+        # asterinas/asterinas container is the developing container of asterinas,
+        # asterinas/osdk container is built with the intructions from Asterinas Book
+        container: ['asterinas/asterinas', 'asterinas/osdk']
+    container: ${{ format('{0}:0.6.2', matrix.container) }}
     steps:
       - run: echo "Running in ${{ matrix.container }}"
 
@@ -21,7 +28,7 @@ jobs:
 
       - name: Lint
         id: lint
-        if: matrix.container == 'asterinas/asterinas:0.6.2'
+        if: ${{ matrix.container == 'asterinas/asterinas' }}
         run: make check_osdk
 
       # Github's actions/checkout@v4 will result in a new user (not root) 

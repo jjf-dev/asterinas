@@ -5,11 +5,17 @@ on:
   schedule:
     - cron: '0 15 * * *'
   workflow_call:
+    inputs:
+      skip: 
+        description: 'Whether to check publish'
+        required: false
+        default: false
+        type: 'boolean'
   workflow_dispatch:
 
 jobs:
   lint:
-    if: github.event_name != 'schedule'
+    if: ${{ github.event_name != 'schedule' && !inputs.skip }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container: asterinas/asterinas:0.6.2
@@ -23,7 +29,7 @@ jobs:
         run: make check
 
   unit-test:
-    if: github.event_name != 'schedule'
+    if: ${{ github.event_name != 'schedule' && !inputs.skip }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container: asterinas/asterinas:0.6.2
@@ -43,7 +49,7 @@ jobs:
       # TODO: add component check.
 
   integration-test:
-    if: github.event_name != 'schedule'
+    if: ${{ github.event_name != 'schedule' && !inputs.skip }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container: asterinas/asterinas:0.6.2

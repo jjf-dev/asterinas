@@ -4,9 +4,15 @@ on:
   workflow_dispatch:
   workflow_call:
     inputs:
+      build:
+        description: 'Whether to build image'
+        required: false
+        default: false
+        type: 'boolean'
       push:
         description: 'Whether to push image to docker hub'
-        required: true
+        required: false
+        default: false
         type: 'boolean'
     secrets:
       DOCKERHUB_USERNAME:
@@ -44,6 +50,7 @@ jobs:
           python3 ./tools/docker/gen_dockerfile.py
 
       - name: Build and push development image
+        if: ${{ inputs.build }}
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -60,6 +67,7 @@ jobs:
           python3 ./tools/docker/gen_dockerfile.py --intel-tdx
 
       - name: Build and push development image for Intel TDX
+        if: ${{ inputs.build }}
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -75,6 +83,7 @@ jobs:
           python3 ./osdk/tools/docker/gen_dockerfile.py
 
       - name: Build and push OSDK test image
+        if: ${{ inputs.build }}
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -90,6 +99,7 @@ jobs:
           python3 ./osdk/tools/docker/gen_dockerfile.py --intel-tdx
 
       - name: Build and push OSDK test image for Intel TDX
+        if: ${{ inputs.build }}
         uses: docker/build-push-action@v4
         with:
           context: .

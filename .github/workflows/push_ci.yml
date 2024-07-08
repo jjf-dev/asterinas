@@ -57,87 +57,48 @@ jobs:
 
       - run: echo "VERSION does not change" 
 
-  # Jobs that will run when VERSION does _not_ change
-  kernel_test:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
-    uses: ./.github/workflows/test_asterinas.yml
-
-  osdk_test:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
-    uses: ./.github/workflows/test_osdk.yml
-
-  check_build_doc:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
-    uses: ./.github/workflows/publish_api_docs.yml
-    with:
-      upload: false
-
-  update_website:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
-    uses: ./.github/workflows/publish_website.yml
-    with:
-      deploy: true
-    secrets:
-      BOOK_PUBLISH_KEY: ${{ secrets.BOOK_PUBLISH_KEY }}
-
-  check_publish_osdk:
-    needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed != 'true'
-    uses: ./.github/workflows/publish_osdk.yml
-    with:
-      publish: false
-
-  # Jobs that will run when VERSION changes
   docker_push:
     needs: check_changed_files
-    if: needs.check_changed_files.outputs.version_changed == 'true'
     uses: ./.github/workflows/publish_docker_images.yml
     with:
-      push: true
+      build: ${{ needs.check_changed_files.outputs.version_changed == 'true' }}
+      push: ${{ needs.check_changed_files.outputs.version_changed == 'true' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  kernel_test_release:
+  kernel_test:
     needs: [docker_push]
     uses: ./.github/workflows/test_asterinas.yml
 
-  osdk_test_release:
+  osdk_test:
     needs: [docker_push]
     uses: ./.github/workflows/test_osdk.yml
 
-  update_doc_release:
-    needs: [kernel_test_release, osdk_test_release]
-    uses: ./.github/workflows/publish_api_docs.yml
-    with:
-      upload: true
-    secrets:
-      API_DOCS_PUBLISH_KEY: ${{ secrets.API_DOCS_PUBLISH_KEY }}
-
-  update_website_release:
-    needs: [kernel_test_release, osdk_test_release]
-    uses: ./.github/workflows/publish_website.yml
-    with:
-      deploy: true
-    secrets:
-      BOOK_PUBLISH_KEY: ${{ secrets.BOOK_PUBLISH_KEY }}
+  update_website:
+    needs: [kernel_test, osdk_test]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Running update_website"
+    # uses: ./.github/workflows/publish_website.yml
+    # with:
+    #   deploy: true
+    # secrets:
+    #   BOOK_PUBLISH_KEY: ${{ secrets.BOOK_PUBLISH_KEY }}
 
   release_tag:
-    needs: [update_doc_release, update_website_release]
+    needs: [update_website]
+    if: ${{ needs.check_changed_files.outputs.version_changed == 'true' }}
     uses: ./.github/workflows/push_git_tag.yml
 
   publish_osdk:
-    needs: [release_tag]
+    needs: [update_website]
     uses: ./.github/workflows/publish_osdk.yml
     with:
       publish: true
     # FIXME: Github allows inherit secrets from caller workflow,
     # with a simple `secrets: inherit`.
-    # But this syntax is only supported for organization
+    # But this syntax is only supported for organization account
     # Ref: <https://docs.github.com/en/actions/using-workflows/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow>
     secrets:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
