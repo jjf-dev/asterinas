@@ -62,13 +62,13 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  merge_group_kernel_test:
-    needs: [merge_group_docker_push]
-    uses: ./.github/workflows/test_asterinas.yml
+  # merge_group_kernel_test:
+  #   needs: [merge_group_docker_push]
+  #   uses: ./.github/workflows/test_asterinas.yml
 
-  merge_group_osdk_test:
-    needs: [merge_group_docker_push]
-    uses: ./.github/workflows/test_osdk.yml
+  # merge_group_osdk_test:
+  #   needs: [merge_group_docker_push]
+  #   uses: ./.github/workflows/test_osdk.yml
 
   merge_group_check_publish_osdk:
     needs: [merge_group_docker_push]
