@@ -54,28 +54,31 @@ jobs:
     with:
       build: ${{ needs.check_changed_files.outputs.version_changed == 'true' }}
       push: ${{ needs.check_changed_files.outputs.version_changed == 'true' && github.event_name == 'merge_group' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   osdk_test:
-    needs: [docker_build_and_push]
+    needs: [check_changed_files, docker_build_and_push]
     uses: ./.github/workflows/test_osdk.yml
     with:
       skip: ${{ needs.check_changed_files.outputs.version_changed == 'true' && github.event_name == 'pull_request' }}
   
   kernel_test:
-    needs: [docker_build_and_push]
+    needs: [check_changed_files, docker_build_and_push]
     uses: ./.github/workflows/test_asterinas.yml
     with:
       skip: ${{ needs.check_changed_files.outputs.version_changed == 'true' && github.event_name == 'pull_request' }}
 
   check_publish_osdk:
-    needs: [docker_build_and_push]
+    needs: [check_changed_files, docker_build_and_push]
     uses: ./.github/workflows/publish_osdk.yml
     with:
       skip: ${{ needs.check_changed_files.outputs.version_changed == 'true' && github.event_name == 'pull_request' }}
       publish: false
   
   check_build_website:
-    needs: [docker_build_and_push]
+    needs: [check_changed_files, docker_build_and_push]
     uses: ./.github/workflows/publish_website.yml
     with:
       skip: ${{ needs.check_changed_files.outputs.version_changed == 'true' && github.event_name == 'pull_request' }}
