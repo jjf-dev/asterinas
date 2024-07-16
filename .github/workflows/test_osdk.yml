@@ -20,7 +20,7 @@ jobs:
         # asterinas/asterinas container is the developing container of asterinas,
         # asterinas/osdk container is built with the intructions from Asterinas Book
         container: ['asterinas/asterinas', 'asterinas/osdk']
-    container: ${{ format('{0}:0.6.2', matrix.container) }}
+    container: ${{ format('{0}:0.2.0', matrix.container) }}
     steps:
       - run: echo "Running in ${{ matrix.container }}"
 

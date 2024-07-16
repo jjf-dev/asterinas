@@ -23,7 +23,7 @@ jobs:
     if: ${{ !inputs.skip }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    container: asterinas/asterinas:0.6.2
+    container: asterinas/asterinas:0.2.0
     steps:
       - uses: actions/checkout@v2
         with:
