@@ -407,9 +407,7 @@ impl FileLike for InodeHandle {
         if let Some(ref file_io) = self.file_io {
             file_io.check_seekable()?;
             if file_io.is_offset_aware() {
-                // TODO: Figure out whether we need to add support for seeking from the end of
-                // special files.
-                return do_seek_util(&self.offset, pos, None);
+                return file_io.seek(&self.offset, pos);
             } else {
                 return Ok(0);
             }
@@ -545,6 +543,14 @@ pub trait FileIo: Pollable + InodeIo + Any + Send + Sync + 'static {
     /// [`check_seekable`]: FileIo::check_seekable
     fn check_positional_io(&self) -> Result<()> {
         self.check_seekable()
+    }
+
+    /// Seeks the file position tracked by the inode handle.
+    ///
+    /// The default behavior supports `SEEK_SET` and `SEEK_CUR`, and rejects
+    /// `SEEK_END` for special files.
+    fn seek(&self, offset: &Mutex<usize>, pos: SeekFrom) -> Result<usize> {
+        do_seek_util(offset, pos, None)
     }
 
     // See `FileLike::mappable`.

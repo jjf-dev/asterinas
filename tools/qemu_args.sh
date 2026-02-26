@@ -16,12 +16,18 @@
 #  - SMP: number of CPUs;
 #  - MEM: amount of memory, e.g. "8G";
 #  - VNC_PORT: VNC port, default is "42".
+#  - ENABLE_VIRTIOFS: "0" or "1" to enable vhost-user virtio-fs device;
+#  - VIRTIOFS_TAG: mount tag for virtio-fs device;
+#  - VIRTIOFS_SOCKET: vhost-user socket path for virtio-fs backend.
 
 OVMF=${OVMF:-"on"}
 VHOST=${VHOST:-"off"}
 VSOCK=${VSOCK:-"off"}
 NETDEV=${NETDEV:-"user"}
 CONSOLE=${CONSOLE:-"hvc0"}
+ENABLE_VIRTIOFS=${ENABLE_VIRTIOFS:-"0"}
+VIRTIOFS_TAG=${VIRTIOFS_TAG:-"myfs"}
+VIRTIOFS_SOCKET=${VIRTIOFS_SOCKET:-"/tmp/vhostqemu/vfs.sock"}
 
 SSH_RAND_PORT=${SSH_PORT:-$(shuf -i 1024-65535 -n 1)}
 NGINX_RAND_PORT=${NGINX_PORT:-$(shuf -i 1024-65535 -n 1)}
@@ -128,6 +134,17 @@ if [ "$1" = "microvm" ]; then
         $CONSOLE_ARGS \
     "
 else
+    VIRTIOFS_QEMU_ARGS=""
+    if [ "$ENABLE_VIRTIOFS" = "1" ]; then
+        echo "[$1] Enabled virtio-fs: tag=$VIRTIOFS_TAG, socket=$VIRTIOFS_SOCKET" 1>&2
+        VIRTIOFS_QEMU_ARGS="\
+            -object memory-backend-memfd,id=mem0,size=${MEM:-8G},share=on \
+            -numa node,memdev=mem0 \
+            -chardev socket,id=char0,path=$VIRTIOFS_SOCKET \
+            -device vhost-user-fs-pci,chardev=char0,tag=$VIRTIOFS_TAG \
+        "
+    fi
+
     QEMU_ARGS="\
         $COMMON_QEMU_ARGS \
         -machine q35,kernel-irqchip=split \
@@ -135,6 +152,7 @@ else
         -device virtio-blk-pci,bus=pcie.0,addr=0x7,drive=x1,serial=vexfat,disable-legacy=on,disable-modern=off,queue-size=64,num-queues=1,request-merging=off,backend_defaults=off,discard=off,write-zeroes=off,event_idx=off,indirect_desc=off,queue_reset=off$IOMMU_DEV_EXTRA \
         -object rng-random,id=rng0,filename=/dev/urandom \
         -device virtio-rng-pci,bus=pcie.0,addr=0x8,disable-legacy=on,disable-modern=off,rng=rng0,event_idx=off,indirect_desc=off,queue_reset=off$IOMMU_DEV_EXTRA \
+        $VIRTIOFS_QEMU_ARGS \
         -device virtio-net-pci,netdev=net01,disable-legacy=on,disable-modern=off$VIRTIO_NET_FEATURES$IOMMU_DEV_EXTRA \
         -device virtio-serial-pci,disable-legacy=on,disable-modern=off$IOMMU_DEV_EXTRA \
         $CONSOLE_ARGS \

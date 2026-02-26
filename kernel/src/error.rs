@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
+use aster_virtio::device::VirtioDeviceError;
+
 /// Error number.
 #[expect(clippy::upper_case_acronyms)]
 #[repr(i32)]
@@ -247,6 +249,54 @@ impl From<aster_block::bio::BioStatus> for Error {
                 Error::with_message(Errno::EIO, "I/O operation fails")
             }
             status => panic!("Can not convert the status: {:?} to an error", status),
+        }
+    }
+}
+
+impl From<VirtioDeviceError> for Error {
+    fn from(virtio_error: VirtioDeviceError) -> Self {
+        match virtio_error {
+            VirtioDeviceError::Transport(_) => {
+                Error::with_message(Errno::EIO, "Virtio transport error")
+            }
+            VirtioDeviceError::ResourceAlloc(error) => error.into(),
+            VirtioDeviceError::InvalidQueueArgs => {
+                Error::with_message(Errno::EINVAL, "Invalid virtqueue arguments")
+            }
+            VirtioDeviceError::UnsupportedConfig => {
+                Error::with_message(Errno::EINVAL, "Unsupported virtio configuration")
+            }
+            VirtioDeviceError::QueuesAmountDoNotMatch(_, _) => Error::with_message(
+                Errno::EINVAL,
+                "The queues amount does not match the requirement",
+            ),
+            VirtioDeviceError::QueueUnknownError => {
+                Error::with_message(Errno::EIO, "Unknown error of queue")
+            }
+            VirtioDeviceError::FileSystemError(code) => {
+                let errno = match code {
+                    -1 | 1 => Errno::EPERM,
+                    -2 | 2 => Errno::ENOENT,
+                    -5 | 5 => Errno::EIO,
+                    -13 | 13 => Errno::EACCES,
+                    -17 | 17 => Errno::EEXIST,
+                    -20 | 20 => Errno::ENOTDIR,
+                    -21 | 21 => Errno::EISDIR,
+                    -22 | 22 => Errno::EINVAL,
+                    -27 | 27 => Errno::EFBIG,
+                    -28 | 28 => Errno::ENOSPC,
+                    -30 | 30 => Errno::EROFS,
+                    -36 | 36 => Errno::ENAMETOOLONG,
+                    -39 | 39 => Errno::ENOTEMPTY,
+                    -95 | 95 => Errno::EOPNOTSUPP,
+                    _ => Errno::EIO,
+                };
+                Error::with_message(errno, "Filesystem request failed")
+            }
+            VirtioDeviceError::CapabilityListError => Error::with_message(
+                Errno::EINVAL,
+                "The input virtio capability list contains invalid element",
+            ),
         }
     }
 }

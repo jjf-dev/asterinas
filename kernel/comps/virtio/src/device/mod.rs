@@ -7,6 +7,7 @@ use crate::{queue, transport::VirtioTransportError};
 pub mod block;
 pub mod console;
 pub mod entropy;
+pub mod filesystem;
 pub mod input;
 pub mod network;
 pub mod socket;
@@ -37,6 +38,7 @@ pub(crate) enum VirtioDeviceType {
     Pstore = 22,
     Iommu = 23,
     Memory = 24,
+    FileSystem = 26,
 }
 
 #[derive(Debug)]
@@ -45,6 +47,15 @@ pub enum VirtioDeviceError {
     ResourceAlloc(ostd::Error),
     InvalidQueueArgs,
     UnsupportedConfig,
+    /// queues amount do not match the requirement
+    /// first element is actual value, second element is expect value
+    QueuesAmountDoNotMatch(u16, u16),
+    /// unknown error of queue
+    QueueUnknownError,
+    /// filesystem request failed with a FUSE negative errno value
+    FileSystemError(i32),
+    /// The input virtio capability list contains invalid element
+    CapabilityListError,
 }
 
 impl From<VirtioTransportError> for VirtioDeviceError {
@@ -59,5 +70,11 @@ impl From<queue::CreationError> for VirtioDeviceError {
             queue::CreationError::InvalidArgs => Self::InvalidQueueArgs,
             queue::CreationError::ResourceAlloc(e) => Self::ResourceAlloc(e),
         }
+    }
+}
+
+impl From<queue::AddBufsError> for VirtioDeviceError {
+    fn from(_: queue::AddBufsError) -> Self {
+        Self::QueueUnknownError
     }
 }
