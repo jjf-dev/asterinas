@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use alloc::sync::Arc;
+use core::marker::PhantomData;
 
 use ostd::{
     Result,
     mm::{
-        Daddr, FallibleVmWrite, HasDaddr, HasSize, Infallible, VmReader,
+        Daddr, HasDaddr, HasSize, Infallible, VmReader, VmWriter,
         dma::{FromDevice, ToDevice},
     },
 };
@@ -19,34 +20,30 @@ pub struct TxBuffer {
 }
 
 impl TxBuffer {
-    pub fn new<H: Pod>(
-        header: &H,
-        packet: &mut VmReader,
-        pool: &Arc<DmaPool<ToDevice>>,
-    ) -> Result<Self> {
-        // This wraps `new_impl` to prevent unnecessary monomorphization caused by `H`.
-        Self::new_impl(header.as_bytes(), packet, pool)
+    pub fn new<H: Pod>(header: &H, packet: &[u8], pool: &Arc<DmaPool<ToDevice>>) -> Result<Self> {
+        let mut builder = Self::new_builder::<H>(pool)?;
+
+        builder
+            .append(|mut writer| {
+                assert!(writer.avail() >= packet.len());
+                Ok(writer.write(&mut VmReader::from(packet)))
+            })
+            .unwrap();
+
+        Ok(builder.build(header))
     }
 
-    fn new_impl(
-        header: &[u8],
-        packet: &mut VmReader,
-        pool: &Arc<DmaPool<ToDevice>>,
-    ) -> Result<Self> {
-        let nbytes = header.len().checked_add(packet.remain()).unwrap();
-        assert!(nbytes <= pool.segment_size());
+    pub fn new_builder<H: Pod>(pool: &Arc<DmaPool<ToDevice>>) -> Result<TxBufferBuilder<H>> {
+        assert!(size_of::<H>() <= pool.segment_size());
 
         let segment = pool.alloc_segment()?;
 
-        let tx_buffer = {
-            let mut writer = segment.writer().unwrap();
-            writer.write(&mut VmReader::from(header));
-            writer.write_fallible(packet).map_err(|(err, _)| err)?;
-            Self { segment, nbytes }
+        let builder = TxBufferBuilder {
+            segment,
+            nbytes: size_of::<H>(),
+            _phantom: PhantomData,
         };
-        tx_buffer.sync_to_device();
-
-        Ok(tx_buffer)
+        Ok(builder)
     }
 
     fn sync_to_device(&self) {
@@ -63,6 +60,46 @@ impl HasSize for TxBuffer {
 impl HasDaddr for TxBuffer {
     fn daddr(&self) -> Daddr {
         self.segment.daddr()
+    }
+}
+
+pub struct TxBufferBuilder<H> {
+    segment: DmaSegment<ToDevice>,
+    nbytes: usize,
+    _phantom: PhantomData<H>,
+}
+
+impl<H: Pod> TxBufferBuilder<H> {
+    pub fn append<F>(&mut self, f: F) -> Result<usize>
+    where
+        F: FnOnce(VmWriter<Infallible>) -> Result<usize>,
+    {
+        let mut writer = self.segment.writer().unwrap();
+        writer.skip(self.nbytes);
+
+        let bytes_written = f(writer)?;
+        self.nbytes += bytes_written;
+        debug_assert!(self.nbytes <= self.segment.size());
+
+        Ok(bytes_written)
+    }
+
+    pub const fn packet_len(&self) -> usize {
+        self.nbytes - size_of::<H>()
+    }
+
+    pub fn build(self, header: &H) -> TxBuffer {
+        self.segment
+            .writer()
+            .unwrap()
+            .write(&mut VmReader::from(header.as_bytes()));
+
+        let tx_buffer = TxBuffer {
+            segment: self.segment,
+            nbytes: self.nbytes,
+        };
+        tx_buffer.sync_to_device();
+        tx_buffer
     }
 }
 

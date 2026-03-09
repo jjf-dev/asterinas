@@ -6,7 +6,7 @@ use core::fmt::Debug;
 use aster_bigtcp::device::{Checksum, DeviceCapabilities, Medium};
 use aster_network::{AnyNetworkDevice, EthernetAddr, NetError, RxBuffer, TxBuffer};
 use aster_util::slot_vec::SlotVec;
-use ostd::{arch::trap::TrapFrame, debug, mm::VmReader, sync::SpinLock, warn};
+use ostd::{arch::trap::TrapFrame, debug, sync::SpinLock, warn};
 
 use super::{config::VirtioNetConfig, header::VirtioNetHdr};
 use crate::{
@@ -195,12 +195,7 @@ impl NetworkDevice {
         }
 
         let tx_pool = TX_BUFFER_POOL.get().unwrap();
-        let tx_buffer = TxBuffer::new(
-            &self.header,
-            &mut VmReader::from(packet).to_fallible(),
-            tx_pool,
-        )
-        .unwrap();
+        let tx_buffer = TxBuffer::new(&self.header, packet, tx_pool).unwrap();
 
         let token = self
             .send_queue

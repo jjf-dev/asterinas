@@ -9,7 +9,7 @@ pub mod console;
 pub mod filesystem;
 pub mod input;
 pub mod network;
-pub mod socket;
+pub mod vsock;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, TryFromInt)]

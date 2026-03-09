@@ -2,9 +2,10 @@
 
 # SPDX-License-Identifier: MPL-2.0
 
-# To successfully run the vsock test, you should
-# 1. Run vsock server binding port 1234 on the host, before running ./vsock_client
-# 2. Run vsock client connecting (cid,port)=(3,4321) on the host, after running ./vsock_server
+# To successfully run the vsock test, you should run `vsock_test_host` on the
+# Linux host before booting Asterinas. The helper should use
+# `--bind-cid=2 --connect-cid=3` so that guest-to-host and host-to-guest tests
+# both hit the expected CIDs.
 
 set -e
 
@@ -12,6 +13,5 @@ VSOCK_DIR=/test/network/vsock
 cd ${VSOCK_DIR}
 
 echo "Start vsock test......"
-./vsock_client
-./vsock_server
+VSOCK_TEST_PEER_CID=${VSOCK_TEST_PEER_CID:-2} ./vsock_err
 echo "Vsock test passed."
