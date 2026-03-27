@@ -123,7 +123,15 @@ mod virtio_ops;
 pub fn get_device_by_tag(tag: &str) -> Option<Arc<FileSystemDevice>> {
     let devices = FILESYSTEM_DEVICES.get()?;
     let devices = devices.disable_irq().lock();
-    devices.iter().find(|device| device.tag == tag).cloned()
+    let found = devices.iter().find(|device| device.tag == tag).cloned();
+    if found.is_none() {
+        let available_tags: Vec<&str> = devices.iter().map(|device| device.tag.as_str()).collect();
+        warn!(
+            "[virtiofs-debug] device tag '{}' not found; available tags: {:?}",
+            tag, available_tags
+        );
+    }
+    found
 }
 
 fn config_space_change(_: &TrapFrame) {
