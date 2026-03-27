@@ -14,6 +14,7 @@ impl FileSystemDevice {
     pub(crate) fn init(mut transport: Box<dyn VirtioTransport>) -> Result<(), VirtioDeviceError> {
         let config_manager = VirtioFsConfig::new_manager(transport.as_ref());
         let config = config_manager.read_config();
+        let parsed_tag = Self::parse_tag(&config.tag);
 
         let notify_supported =
             transport.read_device_features() & FileSystemFeatures::NOTIFICATION.bits() != 0;
@@ -27,7 +28,23 @@ impl FileSystemDevice {
             max_request_queues_from_transport,
         );
 
+        warn!(
+            "[virtiofs-debug] init start parsed_tag='{}' raw_tag={:?} total_queues={} num_request_queues={} special_queues_count={} notify_supported={}",
+            parsed_tag,
+            &config.tag,
+            total_queues,
+            config.num_request_queues,
+            special_queues_count,
+            notify_supported
+        );
+
         if request_queue_count == 0 {
+            warn!(
+                "[virtiofs-debug] request queue count is zero: total_queues={} special_queues_count={} config.num_request_queues={}",
+                total_queues,
+                special_queues_count,
+                config.num_request_queues
+            );
             return Err(VirtioDeviceError::QueuesAmountDoNotMatch(
                 total_queues,
                 special_queues_count + config.num_request_queues as u16,
@@ -48,14 +65,13 @@ impl FileSystemDevice {
             )?));
         }
 
-        let tag = Self::parse_tag(&config.tag);
         let device = Arc::new(Self {
             transport: SpinLock::new(transport),
             hiprio_queue,
             request_queues,
             dma_pools,
             unique_id_alloc: SyncIdAlloc::with_capacity(UNIQUE_ID_ALLOC_CAPACITY),
-            tag,
+            tag: parsed_tag,
             notify_supported,
         });
 
@@ -86,12 +102,17 @@ impl FileSystemDevice {
         drop(transport);
 
         device.fuse_init()?;
+        warn!("[virtiofs-debug] fuse init ok for tag='{}'", device.tag);
 
-        FILESYSTEM_DEVICES
-            .call_once(|| SpinLock::new(Vec::new()))
-            .disable_irq()
-            .lock()
-            .push(device.clone());
+        let devices = FILESYSTEM_DEVICES.call_once(|| SpinLock::new(Vec::new()));
+        let mut devices = devices.disable_irq().lock();
+        devices.push(device.clone());
+        let registered_tags: Vec<&str> = devices.iter().map(|device| device.tag.as_str()).collect();
+        warn!(
+            "[virtiofs-debug] registered tags after init: {:?}",
+            registered_tags
+        );
+        drop(devices);
 
         info!(
             "{} initialized, tag = {}, request_queues = {}, notify = {}",
