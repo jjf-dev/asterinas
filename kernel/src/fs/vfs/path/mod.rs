@@ -371,7 +371,8 @@ impl Path {
 
         let current_ns_proxy = ctx.thread_local.borrow_ns_proxy();
         let current_mnt_ns = current_ns_proxy.unwrap().mnt_ns();
-        if !current_mnt_ns.owns(&self.mount) {
+        let source_in_current_ns = current_mnt_ns.owns(&self.mount);
+        if !source_in_current_ns && !(self.is_pseudo() && self.type_() == InodeType::File) {
             return_errno_with_message!(
                 Errno::EINVAL,
                 "the source path is not in this mount namespace"
@@ -384,7 +385,18 @@ impl Path {
             );
         }
 
-        let new_mount = self.mount.clone_mount_tree(&self.dentry, None, recursive);
+        let new_mount = if source_in_current_ns {
+            self.mount.clone_mount_tree(&self.dentry, None, recursive)
+        } else {
+            // Namespace files under /proc/<pid>/ns/* resolve to pseudo paths on nsfs, which do
+            // not belong to the caller's mount namespace. Linux still allows bind-mounting them
+            // to persist a namespace, so clone the mount tree into the caller's namespace first.
+            self.mount.clone_mount_tree(
+                &self.dentry,
+                Some(&Arc::downgrade(current_mnt_ns)),
+                recursive,
+            )
+        };
         new_mount.graft_mount_tree(dst_path);
         Ok(())
     }
