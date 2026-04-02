@@ -32,7 +32,9 @@ pub(super) struct FdDirOps<T> {
 
 impl<T: FdOps> FdDirOps<T> {
     pub fn new_inode(dir: &TidDirOps, parent: Weak<dyn Inode>) -> Arc<dyn Inode> {
-        ProcDirBuilder::new(
+        let credentials = dir.thread().as_posix_thread().unwrap().credentials();
+
+        let inode = ProcDirBuilder::new(
             Self {
                 dir: dir.clone(),
                 marker: PhantomData,
@@ -42,7 +44,12 @@ impl<T: FdOps> FdDirOps<T> {
         )
         .parent(parent)
         .build()
-        .unwrap()
+        .unwrap();
+
+        inode.set_owner(credentials.fsuid()).unwrap();
+        inode.set_group(credentials.fsgid()).unwrap();
+
+        inode
     }
 }
 
@@ -189,7 +196,9 @@ impl FdOps for FileSymOps {
             mode = chmod!(mode, u+wx);
         }
 
-        ProcSymBuilder::new(
+        let credentials = tid_dir_ops.thread().as_posix_thread().unwrap().credentials();
+
+        let inode = ProcSymBuilder::new(
             Self {
                 tid_dir_ops,
                 file_desc,
@@ -199,7 +208,12 @@ impl FdOps for FileSymOps {
         )
         .parent(parent)
         .build()
-        .unwrap()
+        .unwrap();
+
+        inode.set_owner(credentials.fsuid()).unwrap();
+        inode.set_group(credentials.fsgid()).unwrap();
+
+        inode
     }
 
     fn file_desc(&self) -> FileDesc {
@@ -250,7 +264,9 @@ impl FdOps for FileInfoOps {
         _access_mode: AccessMode,
         parent: Weak<dyn Inode>,
     ) -> Arc<dyn Inode> {
-        ProcFileBuilder::new(
+        let credentials = tid_dir_ops.thread().as_posix_thread().unwrap().credentials();
+
+        let inode = ProcFileBuilder::new(
             Self {
                 tid_dir_ops,
                 file_desc,
@@ -260,7 +276,12 @@ impl FdOps for FileInfoOps {
         )
         .parent(parent)
         .build()
-        .unwrap()
+        .unwrap();
+
+        inode.set_owner(credentials.fsuid()).unwrap();
+        inode.set_group(credentials.fsgid()).unwrap();
+
+        inode
     }
 
     fn file_desc(&self) -> FileDesc {
