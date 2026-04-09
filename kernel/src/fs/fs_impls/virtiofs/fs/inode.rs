@@ -786,17 +786,26 @@ impl Inode for VirtioFsInode {
             .map_err(|_| Error::with_message(Errno::EIO, "virtiofs readdir failed"))?;
 
         let mut current_off = offset;
+        let mut visited = 0usize;
         for entry in &entries {
-            current_off = entry.offset as usize;
-            visitor.visit(
+            let next_off = entry.offset as usize;
+            if let Err(err) = visitor.visit(
                 entry.name.as_str(),
                 entry.ino,
                 inode_type_from_dirent_type(entry.type_),
-                current_off,
-            )?;
+                next_off,
+            ) {
+                if visited == 0 {
+                    return Err(err);
+                }
+                break;
+            }
+            current_off = next_off;
+            visited += 1;
         }
 
-        Ok(current_off)
+        let delta = current_off.saturating_sub(offset);
+        Ok(delta)
     }
 
     fn sync_data(&self) -> Result<()> {
