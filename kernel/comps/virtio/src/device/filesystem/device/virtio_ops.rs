@@ -41,9 +41,7 @@ impl FileSystemDevice {
         if request_queue_count == 0 {
             warn!(
                 "[virtiofs-debug] request queue count is zero: total_queues={} special_queues_count={} config.num_request_queues={}",
-                total_queues,
-                special_queues_count,
-                config.num_request_queues
+                total_queues, special_queues_count, config.num_request_queues
             );
             return Err(VirtioDeviceError::QueuesAmountDoNotMatch(
                 total_queues,

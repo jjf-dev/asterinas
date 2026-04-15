@@ -31,7 +31,9 @@ impl Read for BoxedReader<'_> {
 pub fn init_in_first_kthread(path_resolver: &PathResolver) -> Result<()> {
     let cmdline = boot_info().kernel_cmdline.as_str();
 
-    let is_virtiofs_root = cmdline.split_whitespace().any(|arg| arg == "rootfs=virtiofs");
+    let is_virtiofs_root = cmdline
+        .split_whitespace()
+        .any(|arg| arg == "rootfs=virtiofs");
     println!(
         "[kernel] rootfs=virtiofs is {}specified in the kernel command line",
         if is_virtiofs_root { "" } else { "not " }

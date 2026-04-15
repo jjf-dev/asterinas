@@ -2,10 +2,7 @@
 
 use core::time::Duration;
 
-use ostd::{
-    log::{Level, Record},
-    timer::Jiffies,
-};
+use ostd::{log::Record, timer::Jiffies};
 
 /// The logger used for Asterinas.
 struct AsterLogger;
@@ -21,6 +18,7 @@ impl ostd::log::Log for AsterLogger {
 
 #[cfg(feature = "log_color")]
 fn print_logs(record: &Record, timestamp: &Duration) {
+    use ostd::log::Level;
     use owo_colors::Style;
 
     let secs = timestamp.as_secs();
