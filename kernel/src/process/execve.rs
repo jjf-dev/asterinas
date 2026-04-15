@@ -47,7 +47,7 @@ pub fn do_execve(
     let fs_ref = ctx.thread_local.borrow_fs();
     let path_resolver = fs_ref.resolver().read();
 
-    debug!(
+    println!(
         "file path: {:?}, argv = {:?}, envp = {:?}",
         path_resolver.make_abs_path(&elf_file).into_string(),
         argv,
