@@ -113,6 +113,11 @@ define_boolean_value!(
     TcpConnBecameDead
 );
 
+define_boolean_value!(
+    /// Whether a pending connection reset error should be consumed when reporting it.
+    ConsumePendingRst
+);
+
 impl<E: Ext> RawTcpSocketExt<E> {
     /// Checks the TCP state for additional events and whether the connection is dead.
     fn check_state(
@@ -398,6 +403,28 @@ impl<E: Ext> TcpConnection<E> {
     where
         F: FnOnce(&mut [u8]) -> (usize, R),
     {
+        self.recv_inner(f, ConsumePendingRst::TRUE)
+    }
+
+    /// Receives some data without consuming a pending connection reset error.
+    ///
+    /// This is used when a higher-level stream read has already copied bytes in the current
+    /// syscall. Linux returns those bytes first and reports the pending reset on a later syscall.
+    pub fn recv_without_consuming_rst<F, R>(&self, f: F) -> Result<(R, NeedIfacePoll), RecvError>
+    where
+        F: FnOnce(&mut [u8]) -> (usize, R),
+    {
+        self.recv_inner(f, ConsumePendingRst::FALSE)
+    }
+
+    fn recv_inner<F, R>(
+        &self,
+        f: F,
+        consume_rst: ConsumePendingRst,
+    ) -> Result<(R, NeedIfacePoll), RecvError>
+    where
+        F: FnOnce(&mut [u8]) -> (usize, R),
+    {
         let common = self.iface().common();
         let mut iface = common.interface();
 
@@ -408,7 +435,9 @@ impl<E: Ext> TcpConnection<E> {
         }
         let result = match socket.recv(f) {
             Err(_) if socket.is_rst_closed => {
-                socket.is_rst_closed = false;
+                if *consume_rst {
+                    socket.is_rst_closed = false;
+                }
                 return Err(RecvError::ConnReset);
             }
             res => res,

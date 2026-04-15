@@ -18,6 +18,11 @@ use crate::{
     util::{MultiRead, MultiWrite},
 };
 
+struct SegmentRecv {
+    recv_bytes: usize,
+    contiguous_len_bytes: usize,
+}
+
 pub(super) struct ConnectedStream {
     tcp_conn: TcpConnection,
     remote_endpoint: IpEndpoint,
@@ -74,30 +79,61 @@ impl ConnectedStream {
         writer: &mut dyn MultiWrite,
         _flags: SendRecvFlags,
     ) -> Result<(usize, NeedIfacePoll)> {
-        let result = self.tcp_conn.recv(|socket_buffer| {
-            match writer.write(&mut VmReader::from(&*socket_buffer)) {
-                Ok(len) => (len, Ok(len)),
-                Err(e) => (0, Err(e)),
-            }
-        });
+        let mut total_recv_bytes = 0;
+        let mut need_poll = NeedIfacePoll::FALSE;
 
-        match result {
-            Ok((Ok(0), need_poll)) => {
-                debug_assert!(!*need_poll);
-                return_errno_with_message!(Errno::EAGAIN, "the receive buffer is empty")
+        loop {
+            if total_recv_bytes > 0 && writer.is_empty() {
+                return Ok((total_recv_bytes, need_poll));
             }
-            Ok((Ok(recv_bytes), need_poll)) => Ok((recv_bytes, need_poll)),
-            Ok((Err(e), need_poll)) => {
-                debug_assert!(!*need_poll);
-                Err(e)
-            }
-            Err(RecvError::Finished) | Err(RecvError::InvalidState) => {
-                // `InvalidState` occurs when the connection is reset but `ECONNRESET` was reported
-                // earlier. Linux returns EOF in this case, so we follow it.
-                Ok((0, NeedIfacePoll::FALSE))
-            }
-            Err(RecvError::ConnReset) => {
-                return_errno_with_message!(Errno::ECONNRESET, "the connection is reset")
+
+            let result = if total_recv_bytes == 0 {
+                self.try_recv_contiguous_segment(writer)
+            } else {
+                self.try_recv_contiguous_segment_without_consuming_rst(writer)
+            };
+
+            match result {
+                Ok((Ok(SegmentRecv { recv_bytes: 0, .. }), current_need_poll)) => {
+                    debug_assert!(!*current_need_poll);
+                    if total_recv_bytes == 0 {
+                        return_errno_with_message!(Errno::EAGAIN, "the receive buffer is empty");
+                    }
+                    return Ok((total_recv_bytes, need_poll));
+                }
+                Ok((Ok(segment), current_need_poll)) => {
+                    total_recv_bytes += segment.recv_bytes;
+                    if *current_need_poll {
+                        need_poll = NeedIfacePoll::TRUE;
+                    }
+
+                    // Stream reads should not expose the receive ring buffer's internal
+                    // segmentation to userspace. If we consumed the whole current contiguous
+                    // fragment and the user buffer still has room, keep draining the wrapped
+                    // part in the same syscall.
+                    if segment.recv_bytes < segment.contiguous_len_bytes {
+                        return Ok((total_recv_bytes, need_poll));
+                    }
+                }
+                Ok((Err(e), current_need_poll)) => {
+                    debug_assert!(!*current_need_poll);
+                    return Err(e);
+                }
+                Err(RecvError::Finished) | Err(RecvError::InvalidState) => {
+                    // `InvalidState` occurs when the connection is reset but `ECONNRESET` was
+                    // reported earlier. Linux returns the bytes already copied in this syscall,
+                    // or EOF if none were copied.
+                    return Ok((total_recv_bytes, need_poll));
+                }
+                Err(RecvError::ConnReset) => {
+                    if total_recv_bytes == 0 {
+                        return_errno_with_message!(Errno::ECONNRESET, "the connection is reset");
+                    }
+
+                    // Linux returns the bytes already copied in this syscall first. The reset
+                    // remains pending because this iteration used `recv_without_consuming_rst()`.
+                    return Ok((total_recv_bytes, need_poll));
+                }
             }
         }
     }
@@ -221,6 +257,40 @@ impl ConnectedStream {
 
     pub(super) fn into_connection(self) -> TcpConnection {
         self.tcp_conn
+    }
+
+    fn try_recv_contiguous_segment(
+        &self,
+        writer: &mut dyn MultiWrite,
+    ) -> core::result::Result<(Result<SegmentRecv>, NeedIfacePoll), RecvError> {
+        self.tcp_conn
+            .recv(|socket_buffer| Self::read_segment_from_writer(writer, socket_buffer))
+    }
+
+    fn try_recv_contiguous_segment_without_consuming_rst(
+        &self,
+        writer: &mut dyn MultiWrite,
+    ) -> core::result::Result<(Result<SegmentRecv>, NeedIfacePoll), RecvError> {
+        self.tcp_conn.recv_without_consuming_rst(|socket_buffer| {
+            Self::read_segment_from_writer(writer, socket_buffer)
+        })
+    }
+
+    fn read_segment_from_writer(
+        writer: &mut dyn MultiWrite,
+        socket_buffer: &mut [u8],
+    ) -> (usize, Result<SegmentRecv>) {
+        let contiguous_len_bytes = socket_buffer.len();
+        match writer.write(&mut VmReader::from(&*socket_buffer)) {
+            Ok(recv_bytes) => (
+                recv_bytes,
+                Ok(SegmentRecv {
+                    recv_bytes,
+                    contiguous_len_bytes,
+                }),
+            ),
+            Err(e) => (0, Err(e)),
+        }
     }
 }
 
