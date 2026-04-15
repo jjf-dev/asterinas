@@ -12,7 +12,7 @@ ostd.workspace = true
 owo-colors = { workspace = true, optional = true }
 
 [features]
-default = ["log_color"]
+default = []
 log_color = ["dep:owo-colors"]
 
 [lints]
