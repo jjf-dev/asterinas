@@ -17,12 +17,10 @@ use device_id::DeviceId;
 
 use self::inode::VirtioFsInode;
 use crate::{
-    fs::{
-        vfs::{
-            file_system::{FileSystem, FsEventSubscriberStats, FsFlags, SuperBlock},
-            inode::{Inode, Metadata},
-            registry::{FsProperties, FsType},
-        },
+    fs::vfs::{
+        file_system::{FileSystem, FsEventSubscriberStats, FsFlags, SuperBlock},
+        inode::{Inode, Metadata},
+        registry::{FsProperties, FsType},
     },
     prelude::*,
     time::clocks::MonotonicCoarseClock,
