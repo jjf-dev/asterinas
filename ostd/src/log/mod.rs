@@ -125,7 +125,7 @@ pub use self::{
 /// Parses the `ostd.log_level` kernel command line parameter, sets the
 /// runtime max level, and registers the `log` crate bridge.
 pub(crate) fn init() {
-    let filter = parse_log_level_from_cmdline().unwrap_or(LevelFilter::Off);
+    let filter = parse_log_level_from_cmdline().unwrap_or(LevelFilter::Warning);
     set_max_level(filter);
 
     static BRIDGE: LogCrateBridge = LogCrateBridge;
