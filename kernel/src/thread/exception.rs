@@ -4,7 +4,7 @@
 use ostd::arch::cpu::context::CpuException;
 #[cfg(target_arch = "loongarch64")]
 use ostd::arch::cpu::context::CpuExceptionInfo as CpuException;
-use ostd::{arch::cpu::context::UserContext, task::Task};
+use ostd::{arch::cpu::context::UserContext, debug, task::Task};
 
 use crate::{
     prelude::*,
