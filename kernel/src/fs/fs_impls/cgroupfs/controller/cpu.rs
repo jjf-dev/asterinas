@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use alloc::sync::Arc;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
-use aster_systree::{Error, Result, SysAttrSetBuilder, SysPerms, SysStr};
+use aster_systree::{Error, MAX_ATTR_SIZE, Result, SysAttrSetBuilder, SysPerms, SysStr};
 use aster_util::{per_cpu_counter::PerCpuCounter, printer::VmPrinter};
 use ostd::{
     cpu::CpuId,
@@ -15,6 +15,7 @@ use ostd::{
 use crate::{
     fs::cgroupfs::systree_node::{CgroupSysNode, CgroupSystem},
     process::Process,
+    util::ReadCString,
 };
 
 /// A sub-controller responsible for CPU resource management in the cgroup subsystem.
@@ -25,6 +26,9 @@ use crate::{
 /// `usage_usec` is derived from their sum when `cpu.stat` is read.
 pub struct CpuController {
     is_enabled: AtomicBool,
+    weight: AtomicU32,
+    max_quota: AtomicU64,
+    max_period: AtomicU64,
     user: PerCpuCounter,
     system: PerCpuCounter,
 }
@@ -39,13 +43,23 @@ pub enum CpuStatKind {
 }
 
 impl CpuController {
-    pub(super) fn init_attr_set(builder: &mut SysAttrSetBuilder, _is_root: bool) {
+    pub(super) fn init_attr_set(builder: &mut SysAttrSetBuilder, is_root: bool) {
+        if !is_root {
+            builder.add(
+                SysStr::from("cpu.weight"),
+                SysPerms::DEFAULT_RW_ATTR_PERMS,
+            );
+            builder.add(SysStr::from("cpu.max"), SysPerms::DEFAULT_RW_ATTR_PERMS);
+        }
         builder.add(SysStr::from("cpu.stat"), SysPerms::DEFAULT_RO_ATTR_PERMS);
     }
 
     fn new(is_enabled: bool) -> Self {
         Self {
             is_enabled: AtomicBool::new(is_enabled),
+            weight: AtomicU32::new(100),
+            max_quota: AtomicU64::new(u64::MAX),
+            max_period: AtomicU64::new(100_000),
             user: PerCpuCounter::new(),
             system: PerCpuCounter::new(),
         }
@@ -103,15 +117,76 @@ impl CpuController {
 
 impl super::SubControl for CpuController {
     fn read_attr_at(&self, name: &str, offset: usize, writer: &mut VmWriter) -> Result<usize> {
-        if name != "cpu.stat" {
-            return Err(Error::AttributeError);
+        match name {
+            "cpu.weight" => {
+                let mut printer = VmPrinter::new_skip(writer, offset);
+                writeln!(printer, "{}", self.weight.load(Ordering::Relaxed))?;
+                Ok(printer.bytes_written())
+            }
+            "cpu.max" => {
+                let mut printer = VmPrinter::new_skip(writer, offset);
+                let quota = self.max_quota.load(Ordering::Relaxed);
+                let period = self.max_period.load(Ordering::Relaxed);
+                if quota == u64::MAX {
+                    writeln!(printer, "max {}", period)?;
+                } else {
+                    writeln!(printer, "{} {}", quota, period)?;
+                }
+                Ok(printer.bytes_written())
+            }
+            "cpu.stat" => self.write_cpu_stat_at(offset, writer),
+            _ => Err(Error::AttributeError),
         }
-
-        self.write_cpu_stat_at(offset, writer)
     }
 
-    fn write_attr(&self, _name: &str, _reader: &mut VmReader) -> Result<usize> {
-        Err(Error::AttributeError)
+    fn write_attr(&self, name: &str, reader: &mut VmReader) -> Result<usize> {
+        match name {
+            "cpu.weight" => {
+                let (content, len) = reader
+                    .read_cstring_until_end(MAX_ATTR_SIZE)
+                    .map_err(|_| Error::PageFault)?;
+                let value = content
+                    .to_str()
+                    .map_err(|_| Error::InvalidOperation)?
+                    .trim()
+                    .parse::<u32>()
+                    .map_err(|_| Error::InvalidOperation)?;
+
+                if !(1..=10_000).contains(&value) {
+                    return Err(Error::InvalidOperation);
+                }
+
+                self.weight.store(value, Ordering::Relaxed);
+                Ok(len)
+            }
+            "cpu.max" => {
+                let (content, len) = reader
+                    .read_cstring_until_end(MAX_ATTR_SIZE)
+                    .map_err(|_| Error::PageFault)?;
+                let value = content.to_str().map_err(|_| Error::InvalidOperation)?;
+                let mut fields = value.split_whitespace();
+
+                let quota = match fields.next() {
+                    Some("max") => u64::MAX,
+                    Some(raw) => raw.parse::<u64>().map_err(|_| Error::InvalidOperation)?,
+                    None => return Err(Error::InvalidOperation),
+                };
+                let period = fields
+                    .next()
+                    .ok_or(Error::InvalidOperation)?
+                    .parse::<u64>()
+                    .map_err(|_| Error::InvalidOperation)?;
+
+                if period == 0 || fields.next().is_some() {
+                    return Err(Error::InvalidOperation);
+                }
+
+                self.max_quota.store(quota, Ordering::Relaxed);
+                self.max_period.store(period, Ordering::Relaxed);
+                Ok(len)
+            }
+            _ => Err(Error::AttributeError),
+        }
     }
 }
 
