@@ -16,7 +16,7 @@ use crate::{
         pipe::PipeHandle,
         utils::DirentVisitor,
         vfs::{
-            inode::{FallocMode, FileOps},
+            inode::{FallocMode, FileOps, Inode},
             inode_ext::InodeExt,
             path::Path,
             range_lock::{FileRange, OFFSET_MAX, RangeLockItem, RangeLockType},
@@ -123,8 +123,13 @@ impl InodeHandle {
             return_errno_with_message!(Errno::EBADF, "the file is not opened readable");
         }
 
+        let file_ops: &dyn FileOps = if let Some(ref open_file) = self.open_file {
+            open_file.as_ref()
+        } else {
+            self.path.inode().as_ref()
+        };
         let mut offset = self.offset.lock();
-        let read_cnt = self.path.inode().readdir_at(*offset, visitor)?;
+        let read_cnt = file_ops.readdir_at(*offset, visitor)?;
         *offset += read_cnt;
         Ok(read_cnt)
     }
@@ -409,7 +414,7 @@ impl FileLike for InodeHandle {
             if open_file.is_offset_aware() {
                 // TODO: Figure out whether we need to add support for seeking from the end of
                 // special files.
-                return do_seek_util(&self.offset, pos, None);
+                return do_seek_util(&self.offset, pos, open_file.seek_end()?);
             } else {
                 return Ok(0);
             }
@@ -419,7 +424,7 @@ impl FileLike for InodeHandle {
         if !inode.type_().is_seekable() {
             return_errno_with_message!(Errno::ESPIPE, "seek is not supported");
         }
-        do_seek_util(&self.offset, pos, inode.seek_end())
+        do_seek_util(&self.offset, pos, Inode::seek_end(inode.as_ref()))
     }
 
     fn fallocate(&self, mode: FallocMode, offset: usize, len: usize) -> Result<()> {

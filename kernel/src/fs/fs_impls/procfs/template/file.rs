@@ -66,6 +66,11 @@ impl<F: ProcFileOps + 'static> FileOps for ProcFile<F> {
     ) -> Result<usize> {
         self.inner.write_at(offset, reader)
     }
+
+    fn seek_end(&self) -> Result<Option<usize>> {
+        // Seeking regular files under `/proc` with `SEEK_END` will fail.
+        Ok(None)
+    }
 }
 
 #[inherit_methods(from = "self.common")]

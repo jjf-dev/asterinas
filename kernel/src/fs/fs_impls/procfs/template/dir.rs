@@ -149,6 +149,11 @@ impl<D: ProcDirOps + 'static> FileOps for ProcDir<D> {
             _ => Ok(iterate_offset - offset),
         }
     }
+
+    fn seek_end(&self) -> Result<Option<usize>> {
+        // Seeking directories under `/proc` with `SEEK_END` will start from zero.
+        Ok(Some(0))
+    }
 }
 
 #[inherit_methods(from = "self.common")]

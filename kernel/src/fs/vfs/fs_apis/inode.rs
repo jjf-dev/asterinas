@@ -333,6 +333,11 @@ pub trait FileOps {
     fn readdir_at(&self, _offset: usize, _visitor: &mut dyn DirentVisitor) -> Result<usize> {
         return_errno_with_message!(Errno::ENOTDIR, "readdir is not supported");
     }
+
+    /// Returns the end position of the file.
+    fn seek_end(&self) -> Result<Option<usize>> {
+        Ok(None)
+    }
 }
 
 pub trait Inode: Any + FileOps + Send + Sync {
